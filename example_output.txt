@@ -1,0 +1,65 @@
+===== Mesh Network Example Output (Gateway Serial & Dashboard) =====
+Time zone: UTC
+Nodes: NODE_ID 101 (Gateway), 1, 2, 3
+PSK: (hidden) - must match on all nodes
+
+----- Serial / Gateway Log (human-friendly) -----
+2025-09-18 08:12:03 [INFO] Node 101 started. Gateway=YES
+2025-09-18 08:12:08 [INFO] Connected peers: listening (ESP-NOW channel 1)
+2025-09-18 08:12:12 [LINE] [SENT] to 3 seq 1 len 11
+2025-09-18 08:12:13 [LINE] [FWD] from 101 -> 3 seq 1 newttl 4
+2025-09-18 08:12:13 [LINE] [FWD] from 101 -> 3 seq 1 newttl 3
+2025-09-18 08:12:14 [LINE] [DELIVER] from 1 seq 37 ttl 2 len 5: Hello
+2025-09-18 08:12:15 [LINE] [DELIVER] from 2 seq 5 ttl 1 len 9: Ack: Hello
+2025-09-18 08:12:20 [LINE] [SENT] to 255 seq 2 len 12
+2025-09-18 08:12:20 [LINE] [DELIVER] from 3 seq 2 ttl 5 len 12: BroadcastMsg
+2025-09-18 08:12:26 [LINE] [ERROR] Duplicate ignored from src=2 seq=5
+
+Explanation:
+- [SENT] indicates the gateway itself transmitted a packet (destination shown).
+- [FWD] indicates a node forwarded a packet (shows original src, target, seq and new TTL).
+- [DELIVER] shows a packet that was intended for this node (or broadcast). The payload text follows the colon.
+- Duplicate ignored: the seen-table prevented rebroadcasting the same packet twice.
+
+----- Streamlit dashboard (text_area contents) -----
+[INFO] Connected to /dev/ttyUSB0 @ 115200
+[SENT] to 3 seq 1 len 11
+[FWD] from 101 -> 3 seq 1 newttl 4
+[FWD] from 101 -> 3 seq 1 newttl 3
+[DELIVER] from 1 seq 37 ttl 2 len 5: Hello
+[DELIVER] from 2 seq 5 ttl 1 len 9: Ack: Hello
+[SENT] to 255 seq 2 len 12
+[DELIVER] from 3 seq 2 ttl 5 len 12: BroadcastMsg
+
+----- Example raw packet bytes (hex) -----
+# Header: src(1) dst(1) ttl(1) seq(2) payload_len(1) + payload (obfuscated)
+# Example (spaces added for readability)
+01 03 05 00 01 0B  7A 3F 14 A2 ...  (payload bytes XOR'd with PSK)
+Interpretation:
+- src=0x01 (node 1), dst=0x03 (node 3)
+- ttl=0x05 (5), seq=0x0001, payload_len=0x0B (11 bytes)
+- Payload bytes are obfuscated with PSK; gateway decodes before showing.
+
+----- Example log file line (CSV) -----
+timestamp, direction, src, dst, seq, ttl, len, payload_text
+2025-09-18T08:12:14Z,DELIVER,1,101,37,2,5,Hello
+2025-09-18T08:12:15Z,DELIVER,2,101,5,1,9,"Ack: Hello"
+2025-09-18T08:12:20Z,SENT,101,255,2,5,12,BroadcastMsg
+
+Notes:
+- direction ∈ {SENT, FWD, DELIVER, ERROR}
+- dst=255 indicates broadcast (0xFF)
+- Use CSV for offline analysis & latency stats.
+
+----- Example failure / retry scenario -----
+2025-09-18 08:13:10 [SENT] to 4 seq 7 len 6
+2025-09-18 08:13:11 [ERROR] No ACK observed for seq 7 (node 4 unreachable)
+2025-09-18 08:13:12 [INFO] Retrying: resend seq 7 (attempt 1)
+2025-09-18 08:13:15 [FWD] from 2 -> 4 seq 7 newttl 3
+2025-09-18 08:13:16 [DELIVER] from 4 seq 7 ttl 2 len 6: Roger!
+
+Interpretation:
+- If a direct neighbor is unreachable, intermediate nodes can still forward and deliver later.
+- Add retry/backoff logic in firmware if desired (not implemented in the basic prototype).
+
+===== End example output =====
